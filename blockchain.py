@@ -29,11 +29,27 @@ def add_transaction(recipient, sender=owner, amount=1.0):
         "amount": amount
     }
     open_transactions.append(transaction)
+    participants.add(sender)
+    participants.add(recipient)
 
 
 def hash_block(block):
-    # TODO 1: najprv ukazat FOR cyklus 
     return '-'.join([str(block[key]) for key in block])
+
+
+def get_balance(participant):
+    tx_sender = [[tx['amount'] for tx in block["transactions"] if tx['sender'] == participant] for block in blockchain]
+    amount_sent = 0
+    for tx in tx_sender:
+        if len(tx) > 0:
+            amount_sent += tx[0]
+
+    tx_recipient = [[tx['amount'] for tx in block["transactions"] if tx['recipient'] == participant] for block in blockchain]
+    amount_received = 0
+    for tx in tx_recipient:
+        if len(tx) > 0:
+            amount_received += tx[0]
+    return amount_received - amount_sent
 
 
 def mine_block():
@@ -46,6 +62,7 @@ def mine_block():
         "transactions": open_transactions
     }
     blockchain.append(block)
+    return True
 
 
 def verify_chain():
@@ -68,6 +85,7 @@ def print_blockchain_elements():
 
 
 def menu():
+    global open_transactions
     waiting_for_input = True
     while waiting_for_input:
         print('Please choose')
@@ -79,13 +97,12 @@ def menu():
         print('q: Quit')
         user_choice = get_user_choice()
         if user_choice == '1':
-            tx_data = get_transaction_value()
-            recipient, amount = tx_data
-            # Add the transaction amount to the blockchain
+            recipient, amount = get_transaction_value()
             add_transaction(recipient, amount=amount)
             print(open_transactions)
         elif user_choice == '2':
-            mine_block()
+            if mine_block():
+                open_transactions = []
         elif user_choice == '3':
             print_blockchain_elements()
         elif user_choice == '4':
@@ -108,6 +125,7 @@ def menu():
             print('Invalid blockchain!')
             # Break out of the loop
             break
+        print(get_balance('Johny'))
     else:
         print('User left!')
 
