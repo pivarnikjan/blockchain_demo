@@ -1,4 +1,5 @@
 import hashlib
+import json
 from collections import OrderedDict
 from functools import reduce
 
@@ -47,8 +48,53 @@ def add_transaction(recipient, sender=owner, amount=1.0):
         open_transactions.append(transaction)
         participants.add(sender)
         participants.add(recipient)
+        save_data()
         return True
     return False
+
+
+def load_data():
+    with open("blockchain.txt", mode="r") as f:
+        file_content = f.readlines()
+        global blockchain, open_transactions
+
+        blockchain = json.loads(file_content[0][:-1])
+        updated_blockchain = []
+
+        for block in blockchain:
+            updated_block = {
+                'previous_hash': block['previous_hash'],
+                'index': block['index'],
+                'proof': block['proof'],
+                'transactions': [OrderedDict([
+                    ("sender", tx['sender']),
+                    ("recipient", tx['recipient']),
+                    ("amount", tx['amount'])
+                ]) for tx in block['transactions']]
+            }
+            updated_blockchain.append(updated_block)
+        blockchain = updated_blockchain
+
+        open_transactions = json.loads(file_content[1])
+        updated_transactions = []
+        for tx in open_transactions:
+            updated_transaction = OrderedDict([
+                    ("sender", tx['sender']),
+                    ("recipient", tx['recipient']),
+                    ("amount", tx['amount'])
+                ])
+            updated_transactions.append(updated_transaction)
+        open_transactions = updated_transactions
+
+
+load_data()
+
+
+def save_data():
+    with open("blockchain.txt", mode="w") as f:
+        f.write(json.dumps(blockchain))
+        f.write("\n")
+        f.write(json.dumps(open_transactions))
 
 
 def valid_proof(transactions, last_hash, proof):
@@ -133,7 +179,7 @@ def menu():
     global open_transactions
     waiting_for_input = True
     while waiting_for_input:
-        print('Please choose')
+        print('\n Please choose')
         print('1: Add a new transaction value')
         print('2: Mine a new block')
         print('3: Output the blockchain blocks')
@@ -147,11 +193,12 @@ def menu():
             if add_transaction(recipient, amount=amount):
                 print("Added transaction!")
             else:
-                print("Transaction failed")
+                print("Transaction failed \n")
             print(open_transactions)
         elif user_choice == '2':
             if mine_block():
                 open_transactions = []
+                save_data()
         elif user_choice == '3':
             print_blockchain_elements()
         elif user_choice == '4':
