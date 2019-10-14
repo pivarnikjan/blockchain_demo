@@ -2,9 +2,9 @@ import json
 from functools import reduce
 
 from block import Block
-from hash_util import hash_block
+from utility.hash_util import hash_block
 from transaction import Transaction
-from verification import Verification
+from utility.verification import Verification
 
 MINING_REWARD = 10
 owner = "Johny"
@@ -94,6 +94,8 @@ class Blockchain:
         return self.__chain[-1]
 
     def add_transaction(self, recipient, sender, amount=1.0):
+        if self.hosting_node is None:
+            return False
         transaction = Transaction(sender, recipient, amount)
         if Verification.verify_transaction(transaction, self.get_balance):
             self.__open_transactions.append(transaction)
@@ -102,6 +104,8 @@ class Blockchain:
         return False
 
     def mine_block(self):
+        if self.hosting_node is None:
+            return False
         last_block = self.__chain[-1]
         hashed_block = hash_block(last_block)
         proof = self.proof_of_work()
