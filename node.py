@@ -32,9 +32,7 @@ def create_keys():
         }
         return jsonify(response), 201
     else:
-        response = {
-            "message": "Saving the keys failed."
-        }
+        response = {"message": "Saving the keys failed."}
         return jsonify(response), 500
 
 
@@ -50,9 +48,7 @@ def load_keys():
         }
         return jsonify(response), 200
     else:
-        response = {
-            "message": "Loading the keys failed."
-        }
+        response = {"message": "Loading the keys failed."}
         return jsonify(response), 500
 
 
@@ -73,25 +69,65 @@ def get_balance():
         return jsonify(response), 500
 
 
+@app.route('/broadcast-transaction', methods=['POST'])
+def broadcast_transaction():
+    values = request.get_json()
+    if not values:
+        response = {"message": "No Data found."}
+        return jsonify(response), 400
+    required = ['sender', 'recipient', 'transaction', 'amount']
+    if not all(key in values for key in required):
+        response = {"message": "Required data is missing."}
+        return jsonify(response), 400
+    success = blockchain.add_transaction(values['recipient'], values['sender'], values['signature'], values['amount'], is_receiving=True)
+    if success:
+        response = {
+            "message": "Successfully added transaction.",
+            "transanction": {
+                "sender": values['sender'],
+                "recipient": values['recipient'],
+                "amount": values['amount'],
+                "signature": values['signature']
+            }
+        }
+        return jsonify(response), 201
+    else:
+        response = {"message": "Creating a transaction failed."}
+        return jsonify(response), 500
+
+
+@app.route('/broadcast-block', methods=['POST'])
+def broadcast_block():
+    values = request.get_json()
+    if not values:
+        response = {"message": "No Data found."}
+        return jsonify(response), 400
+    if 'block' not in values:
+        response = {"message": "Some data is missing."}
+        return jsonify(response), 400
+    block = values['block']
+    if block['index'] == blockchain.chain[-1].index + 1:
+        blockchain.add_block(block)
+    elif block['index'] > blockchain.chain[-1].index:
+        pass
+    else:
+        response = {"message", "Blockchain seems to be shorter, block not added"}
+        return jsonify(response), 409
+
+
 @app.route('/transaction', methods=['POST'])
 def add_transaction():
     if not wallet.public_key:
-        response = {
-            "message": "No wallet set up."
-        }
+        response = {"message": "No wallet set up."}
         return jsonify(response), 400
     values = request.get_json()
     if not values:
-        response = {
-            "message": "No data found."
-        }
+        response = {"message": "No data found."}
         return jsonify(response), 400
     required_fields = ['recipient', 'amount']
 
     if not all(field in values for field in required_fields):
-        response = {
-            "message": "Required data is missing."
-        }
+        response = {"message": "Required data is missing."}
         return jsonify(response), 400
 
     recipient = values['recipient']
@@ -157,14 +193,10 @@ def get_chain():
 def add_node():
     values = request.get_json()
     if not values:
-        response = {
-            "message": "No data attached."
-        }
+        response = {"message": "No data attached."}
         return jsonify(response), 400
     if 'node' not in values:
-        response = {
-            "message": "No node data found."
-        }
+        response = {"message": "No node data found."}
         return jsonify(response), 400
     node = values['node']
     blockchain.add_peer_node(node)
@@ -178,9 +210,7 @@ def add_node():
 @app.route('/node/<node_url>', methods=['DELETE'])
 def remove_node(node_url):
     if node_url == "" or not node_url:
-        response = {
-            "message": "No node found."
-        }
+        response = {"message": "No node found."}
         return jsonify(response), 400
     blockchain.remove_peer_node(node_url)
     response = {
@@ -193,9 +223,7 @@ def remove_node(node_url):
 @app.route('/nodes', methods=['GET'])
 def get_nodes():
     nodes = blockchain.get_peer_nodes()
-    response = {
-        "all_nodes": nodes
-    }
+    response = {"all_nodes": nodes}
     return jsonify(response), 200
 
 
