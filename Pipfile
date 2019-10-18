@@ -9,6 +9,7 @@ name = "pypi"
 pycrypto = "*"
 flask = "*"
 flask-cors = "*"
+requests = "*"
 
 [requires]
 python_version = "3.7"
