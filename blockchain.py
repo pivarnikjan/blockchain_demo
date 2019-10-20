@@ -22,6 +22,7 @@ class Blockchain:
         self.public_key = public_key
         self.__peer_nodes = set()
         self.node_id = node_id
+        self.resolve_conflicts = False
         self.load_data()
 
     @property
@@ -39,16 +40,13 @@ class Blockchain:
         try:
             with open(f"blockchain-{self.node_id}.txt", mode="r") as f:
                 file_content = f.readlines()
-
                 blockchain = json.loads(file_content[0][:-1])
                 updated_blockchain = []
-
                 for block in blockchain:
                     converted_tx = [Transaction(tx['sender'], tx['recipient'], tx['signature'], tx['amount']) for tx in block['transactions']]
                     updated_block = Block(block['index'], block['previous_hash'], converted_tx, block['proof'], block['timestamp'])
                     updated_blockchain.append(updated_block)
                 self.chain = updated_blockchain
-
                 open_transactions = json.loads(file_content[1][:-1])
                 updated_transactions = []
                 for tx in open_transactions:
@@ -85,7 +83,7 @@ class Blockchain:
 
     def get_balance(self, sender=None):
         if not sender:
-            if self.public_key is None:
+            if not self.public_key:
                 return None
             participant = self.public_key
         else:
@@ -109,8 +107,7 @@ class Blockchain:
         return self.__chain[-1]
 
     def add_transaction(self, recipient, sender, signature, amount=1.0, is_receiving=False):
-        if self.public_key is None:
-            return False
+
         transaction = Transaction(sender, recipient, signature, amount)
         if Verification.verify_transaction(transaction, self.get_balance):
             self.__open_transactions.append(transaction)
@@ -153,16 +150,36 @@ class Blockchain:
         self.__chain.append(block)
         self.__open_transactions = []
         self.save_data()
+        for node in self.__peer_nodes:
+            url = f"http://{node}/broadcast-block"
+            converted_block = block.__dict__.copy()
+            converted_block['transactions'] = [tx.__dict__ for tx in converted_block['transactions']]
+            try:
+                response = requests.post(url, json={'block': converted_block})
+                if response.status_code == 400 or response.status_code == 500:
+                    print("Block declined, needs resolving")
+                if response.status_code == 409:
+                    self.resolve_conflicts = True
+            except requests.exceptions.ConnectionError:
+                continue
         return block
 
     def add_block(self, block):
-        transactions = [Transaction(tx['sender'], tx['recipient'], tx['signature'], tx['amount']) for tx in block['transaction']]
-        proof_is_valid = Verification.valid_proof(transactions, block['previous_hash'], block['proof'])
+        transactions = [Transaction(tx['sender'], tx['recipient'], tx['signature'], tx['amount']) for tx in block['transactions']]
+        proof_is_valid = Verification.valid_proof(transactions[:-1], block['previous_hash'], block['proof'])
         hashes_match = hash_block(self.chain[-1]) == block['previous_hash']
         if not proof_is_valid or not hashes_match:
             return False
         converted_block = Block(block['index'], block['previous_hash'], transactions, block['proof'], block['timestamp'])
         self.__chain.append(converted_block)
+        stored_transactions = self.__open_transactions[:]
+        for itx in block['transactions']:
+            for opentx in stored_transactions:
+                if opentx.sender == itx['sender'] and opentx.recipient == itx['recipient'] and opentx.amount == itx['amount'] and opentx.signature == itx['signature']:
+                    try:
+                        self.__open_transactions.remove(opentx)
+                    except ValueError:
+                        print('Item was already removed')
         self.save_data()
         return True
 
