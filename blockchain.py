@@ -10,8 +10,8 @@ from utility.verification import Verification
 from wallet import Wallet
 
 MINING_REWARD = 10
-owner = "Johny"
-participants = {"Johny"}
+
+print(__name__)
 
 
 class Blockchain:
@@ -43,27 +43,37 @@ class Blockchain:
                 blockchain = json.loads(file_content[0][:-1])
                 updated_blockchain = []
                 for block in blockchain:
-                    converted_tx = [Transaction(tx['sender'], tx['recipient'], tx['signature'], tx['amount']) for tx in block['transactions']]
-                    updated_block = Block(block['index'], block['previous_hash'], converted_tx, block['proof'], block['timestamp'])
+                    converted_tx = [Transaction(
+                        tx['sender'], tx['recipient'], tx['signature'], tx['amount']) for tx in block['transactions']]
+                    updated_block = Block(
+                        block['index'], block['previous_hash'], converted_tx, block['proof'], block['timestamp'])
                     updated_blockchain.append(updated_block)
                 self.chain = updated_blockchain
                 open_transactions = json.loads(file_content[1][:-1])
                 updated_transactions = []
                 for tx in open_transactions:
-                    updated_transaction = Transaction(tx['sender'], tx['recipient'], tx['signature'], tx['amount'])
+                    updated_transaction = Transaction(
+                        tx['sender'], tx['recipient'], tx['signature'], tx['amount'])
                     updated_transactions.append(updated_transaction)
                 self.__open_transactions = updated_transactions
                 peer_nodes = json.loads(file_content[2])
                 self.__peer_nodes = set(peer_nodes)
         except (IOError, IndexError):
-            print("Catching ")
+            print("Catching IOError, IndexError ")
         finally:
             print('Cleanup!')
 
     def save_data(self):
         try:
             with open(f"blockchain-{self.node_id}.txt", mode="w") as f:
-                saveable_chain = [block.__dict__ for block in [Block(block_el.index, block_el.previous_hash, [tx.__dict__ for tx in block_el.transactions], block_el.proof, block_el.timestamp) for block_el in self.__chain]]
+                saveable_chain = [block.__dict__ for block in [
+                    Block(
+                        block_el.index,
+                        block_el.previous_hash,
+                        [tx.__dict__ for tx in block_el.transactions],
+                        block_el.proof,
+                        block_el.timestamp
+                    ) for block_el in self.__chain]]
                 f.write(json.dumps(saveable_chain))
                 f.write("\n")
                 saveable_tx = [tx.__dict__ for tx in self.__open_transactions]
@@ -118,8 +128,8 @@ class Blockchain:
                     body = {
                         "sender": sender,
                         "recipient": recipient,
+                        "amount": amount,
                         "signature": signature,
-                        "amount": amount
                     }
                     try:
                         response = requests.post(url, json=body)
@@ -165,12 +175,15 @@ class Blockchain:
         return block
 
     def add_block(self, block):
-        transactions = [Transaction(tx['sender'], tx['recipient'], tx['signature'], tx['amount']) for tx in block['transactions']]
-        proof_is_valid = Verification.valid_proof(transactions[:-1], block['previous_hash'], block['proof'])
+        transactions = [Transaction(
+            tx['sender'], tx['recipient'], tx['signature'], tx['amount']) for tx in block['transactions']]
+        proof_is_valid = Verification.valid_proof(
+            transactions[:-1], block['previous_hash'], block['proof'])
         hashes_match = hash_block(self.chain[-1]) == block['previous_hash']
         if not proof_is_valid or not hashes_match:
             return False
-        converted_block = Block(block['index'], block['previous_hash'], transactions, block['proof'], block['timestamp'])
+        converted_block = Block(
+            block['index'], block['previous_hash'], transactions, block['proof'], block['timestamp'])
         self.__chain.append(converted_block)
         stored_transactions = self.__open_transactions[:]
         for itx in block['transactions']:
@@ -183,6 +196,38 @@ class Blockchain:
         self.save_data()
         return True
 
+    def resolve(self):
+        """Checks all peer nodes' blockchains and replaces the local one with longer valid ones."""
+        # Initialize the winner chain with the local chain
+        winner_chain = self.chain
+        replace = False
+        for node in self.__peer_nodes:
+            url = 'http://{}/chain'.format(node)
+            try:
+                # Send a request and store the response
+                response = requests.get(url)
+                # Retrieve the JSON data as a dictionary
+                node_chain = response.json()
+                # Convert the dictionary list to a list of block AND transaction objects
+                node_chain = [Block(block['index'], block['previous_hash'], [Transaction(
+                    tx['sender'], tx['recipient'], tx['signature'], tx['amount']) for tx in block['transactions']],
+                                    block['proof'], block['timestamp']) for block in node_chain]
+                node_chain_length = len(node_chain)
+                local_chain_length = len(winner_chain)
+                # Store the received chain as the current winner chain if it's longer AND valid
+                if node_chain_length > local_chain_length and Verification.verify_chain(node_chain):
+                    winner_chain = node_chain
+                    replace = True
+            except requests.exceptions.ConnectionError:
+                continue
+        self.resolve_conflicts = False
+        # Replace the local chain with the winner chain
+        self.chain = winner_chain
+        if replace:
+            self.__open_transactions = []
+        self.save_data()
+        return replace
+
     def add_peer_node(self, node):
         self.__peer_nodes.add(node)
         self.save_data()
@@ -193,11 +238,3 @@ class Blockchain:
 
     def get_peer_nodes(self):
         return list(self.__peer_nodes)
-
-
-def menu():
-    pass
-
-
-if __name__ == '__main__':
-    menu()
